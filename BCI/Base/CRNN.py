@@ -1,0 +1,347 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as func
+import torch.optim as optim
+from torch.utils.data import DataLoader
+from torchinfo import summary
+
+import math
+
+import Util as util
+import Config as cfg
+
+
+class CRNN_eeg(nn.Module):
+
+    def __init__(self):
+
+        super(CRNN_eeg, self).__init__()
+
+        # Size here: (1, T, ch1, ch2)
+        # Size here: (1, 400, 15, 15)
+        self.conv1 = nn.Conv3d(in_channels=1, out_channels=4, kernel_size=(51, 1, 1), stride=(1, 1, 1), padding=((51-1)//2, 0, 0))
+        self.bn1 = nn.BatchNorm3d(4, affine=True)
+        self.pool1 = nn.AvgPool3d(kernel_size=(10, 1, 1), stride=(10, 1, 1))
+
+        # Size here: (4, 40, 15, 15)
+        self.conv2 = nn.Conv3d(in_channels=4, out_channels=8, kernel_size=(1, 5, 5), stride=(1, 2, 2), padding=(0, 0, 0))
+        self.bn2 = nn.BatchNorm3d(8, affine=True)
+        self.pool2 = nn.AvgPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+
+        # Size here: (8, 40, 3, 3)
+        self.conv3 = nn.Conv3d(in_channels=8, out_channels=16, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 0, 0))
+        self.bn3 = nn.BatchNorm3d(16, affine=True)
+        self.drop3 = nn.Dropout(p=0.5)
+
+        # Size here: (16, 40, 1)
+        self.lstm = nn.LSTM(input_size=16, hidden_size=16, num_layers=1, batch_first=False)
+        self.drop4 = nn.Dropout(p=0.5)
+
+        self.flat = nn.Flatten()
+
+    def forward(self, x):
+
+        # CNN block
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = func.elu(x)
+        x = self.pool1(x)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = func.elu(x)
+        x = self.pool2(x)
+
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = self.drop3(x)
+
+        x = torch.squeeze(x)
+        x = x.permute(2, 0, 1)
+
+        # RNN block
+        [o, (h, c)] = self.lstm(x)
+        x = h[-1, :, :]
+        x = self.drop4(x)
+
+        out = self.flat(x)
+        # out = self.fc(x)
+        # print(out.shape)
+
+        return out
+
+
+class CRNNClf_eeg(nn.Module):
+
+    def __init__(self, args):
+
+        super(CRNNClf_eeg, self).__init__()
+
+        self.feature_eeg = CRNN_eeg()
+        self.fc = nn.Linear(in_features=args['out_dim'], out_features=2)
+
+    def forward(self, x):
+
+        x = self.feature_eeg(x)
+        out = self.fc(x)
+
+        return out
+
+
+
+
+
+
+
+
+class CRNN_nirs(nn.Module):
+
+    def __init__(self):
+
+        super(CRNN_nirs, self).__init__()
+
+        # Size here: (2, T, ch1, ch2)
+        # Size here: (2, 20, 15, 15)
+        self.conv1 = nn.Conv3d(in_channels=2, out_channels=4, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 0, 0))
+        self.bn1 = nn.BatchNorm3d(4, affine=True)
+        self.pool1 = nn.AvgPool3d(kernel_size=(1, 3, 3), stride=(1, 2, 2))
+
+        # Size here: (4, 20, 6, 6)
+        self.conv2 = nn.Conv3d(in_channels=4, out_channels=8, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1))
+        self.bn2 = nn.BatchNorm3d(8, affine=True)
+        self.pool2 = nn.AvgPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+
+        # Size here: (8, 20, 3, 3)
+        self.conv3 = nn.Conv3d(in_channels=8, out_channels=16, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 0, 0))
+        self.bn3 = nn.BatchNorm3d(16, affine=True)
+        self.drop1 = nn.Dropout(p=0.5)
+
+        # Size here: (16, 20)
+        self.lstm = nn.LSTM(input_size=16, hidden_size=16, num_layers=1, batch_first=False)
+        self.drop2 = nn.Dropout(p=0.5)
+
+        self.flat = nn.Flatten()
+
+    def forward(self, x):
+
+        # CNN block
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = func.elu(x)
+        x = self.pool1(x)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = func.elu(x)
+        x = self.pool2(x)
+
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = self.drop1(x)
+
+        x = torch.squeeze(x)
+        x = x.permute(2, 0, 1)
+
+        # RNN block
+        [o, (h, c)] = self.lstm(x)
+        x = h[-1, :, :]
+        x = self.drop2(x)
+
+        out = self.flat(x)
+        # out = self.fc(x)
+        # print(out.shape)
+
+        return out
+
+
+class CRNNClf_nirs(nn.Module):
+
+    def __init__(self, args):
+
+        super(CRNNClf_nirs, self).__init__()
+
+        self.feature_nirs = CRNN_nirs()
+        self.fc = nn.Linear(in_features=args['out_dim'], out_features=2)
+
+    def forward(self, x):
+
+        x = self.feature_nirs(x)
+        out = self.fc(x)
+
+        return out
+
+
+
+
+
+
+def weights_init(m):
+    if isinstance(m, (nn.Conv2d, nn.Linear)):
+        nn.init.xavier_uniform_(m.weight, gain=math.sqrt(2.0))
+        nn.init.constant_(m.bias, 0.0)
+
+
+def Train(train_dataset, test_dataset, modal):
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # 读取参数
+    config_eeg = cfg.CRNN_eeg
+    config_nirs = cfg.CRNN_nirs
+
+    train_batch_size = 12
+    batch_print = 10
+    test_batch_size = 12
+
+    # 读取数据集
+    train_loader = DataLoader(dataset=train_dataset, batch_size=train_batch_size, shuffle=True)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=test_batch_size, shuffle=True)
+
+    print("train_samples: %d" % train_dataset.__len__())
+    print("test_samples: %d" % test_dataset.__len__())
+    print("\n")
+
+    # 给网络实例化
+    if modal == 'eeg':
+        args = config_eeg['net_args']
+        hyper_param = config_eeg['hyper_param']
+
+        net = CRNNClf_eeg(args)
+        print(net)
+        summary(net, (train_batch_size, 1, args['time'], args['channel'][0], args['channel'][1]))
+    else:
+        args = config_nirs['net_args']
+        hyper_param = config_nirs['hyper_param']
+
+        net = CRNNClf_nirs(args)
+        print(net)
+        summary(net, (train_batch_size, 2, args['time'], args['channel'][0], args['channel'][1]))
+
+    net.to(device)
+
+    # 参数初始化
+    net.apply(weights_init)
+
+    # 定义损失函数
+    criterion = nn.CrossEntropyLoss()
+
+    # 定义更新网络参数的算法（这里用Adam算法）
+    optimizer = optim.Adam(net.parameters(), lr=hyper_param['learning_rate'], weight_decay=1e-3)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=hyper_param['step_size'], gamma=hyper_param['gamma'], last_epoch=-1)
+
+    # 训练
+    train_epoch = 200
+    end_count = 0
+
+    # 画图用
+    record = {
+        'epoch': [],
+        'acc_train': [],
+        'acc_test': [],
+        'loss_train': [],
+        'loss_test': []
+    }
+
+    for epoch in range(train_epoch):
+
+        train_loss = 0.0
+
+        print("learning rate:", optimizer.state_dict()['param_groups'][0]['lr'])
+
+        # 训练
+        net.train()
+
+        for index, data in enumerate(train_loader):
+
+            input, label = data
+
+            # 调整一下数据类型，不然会报错
+            input = input.to(torch.float32)
+            label = label.to(torch.long)
+
+            input = input.to(device)
+            label = label.to(device)
+
+            # print(input.shape)
+            # print(label.shape)
+
+            optimizer.zero_grad()  # 梯度置0
+
+            output = net(input)  # 前向传播
+
+            loss = criterion(output, label)  # 计算损失
+
+            loss.backward()  # 反向传播计算梯度
+
+            optimizer.step()  # 更新参数
+
+            train_loss += loss.item()
+            _, predict = torch.max(output.data, 1)
+
+            if index % batch_print == batch_print - 1:  # 每n个batch打印一次结果，并检查损失是否小于阈值
+                print("[%d, %d] loss: %.3f" % (epoch + 1, index + 1, train_loss / batch_print))
+                train_loss = 0.0
+
+        # 测试
+        net.eval()
+
+        with torch.no_grad():
+
+            def get_acc(loader):
+
+                correct = 0
+                total = 0
+                total_loss = 0.0
+
+                for index, data in enumerate(loader):
+
+                    input, label = data
+
+                    # 调整一下数据类型，不然会报错
+                    input = input.to(torch.float32)
+                    label = label.to(torch.long)
+
+                    input = input.to(device)
+                    label = label.to(device)
+
+                    output = net(input)
+
+                    loss = criterion(output, label)
+
+                    total_loss += loss.item()
+                    
+                    _, predict = torch.max(output.data, 1)
+                    total += label.size(0)
+                    correct += (predict == label).sum().item()
+
+                return total_loss, 100 * correct / total
+
+            train_loss, train_acc = get_acc(train_loader)
+            test_loss, test_acc = get_acc(test_loader)
+
+            # 前面的loss是合计的，所有batch加起来的loss，要做除法还原一下
+            train_loss = train_loss/(train_dataset.__len__() // train_batch_size)
+            test_loss = test_loss/(test_dataset.__len__() // test_batch_size)
+
+        # 保存画图数据
+        record['epoch'].append(epoch + 1)
+        record['acc_train'].append(train_acc)
+        record['acc_test'].append(test_acc)
+        record['loss_train'].append(train_loss)
+        record['loss_test'].append(test_loss)
+
+        print("train loss: %.3f  train accuracy: %.2f%%  test loss: %.3f  test accuracy: %.2f%% \n"
+              % (train_loss, train_acc, test_loss, test_acc))
+
+        # 如果连续10个epoch loss<0.1，则结束训练
+        if train_loss < 0.1 or train_acc > 95:
+            end_count += 1
+        else:
+            end_count = 0
+        if end_count >= 10:
+            break
+
+        scheduler.step()
+
+    return record
+
