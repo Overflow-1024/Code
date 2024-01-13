@@ -1,0 +1,45 @@
+dnpy-demo
+├─ .idea
+│    ├─ .gitignore
+│    ├─ dnpy-demo.iml
+│    ├─ inspectionProfiles
+│    │    ├─ Project_Default.xml
+│    │    └─ profiles_settings.xml
+│    ├─ misc.xml
+│    ├─ modules.xml
+│    └─ workspace.xml
+├─ Projects
+│    ├─ AmReport
+│    │    ├─ Model
+│    │    ├─ Template.docx
+│    │    ├─ __init__.py
+│    │    ├─ __pycache__
+│    │    ├─ config.py
+│    │    ├─ oriData.py
+│    │    ├─ output
+│    │    └─ util.py
+│    └─ OtherReport
+│           ├─ __init__.py
+│           ├─ config.py
+│           └─ oriData.py
+├─ ReportEngine
+│    ├─ Controller.py
+│    ├─ ImageEngine.py
+│    ├─ Model
+│    │    └─ __pycache__
+│    ├─ Renderer
+│    │    ├─ DocxRenderer.py
+│    │    ├─ PdfRenderer.py
+│    │    ├─ __init__.py
+│    │    └─ __pycache__
+│    ├─ View
+│    ├─ __init__.py
+│    ├─ __pycache__
+│    │    ├─ Controller.cpython-37.pyc
+│    │    ├─ ImageEngine.cpython-37.pyc
+│    │    ├─ __init__.cpython-37.pyc
+│    │    └─ mongoEngine.cpython-37.pyc
+│    ├─ mongoEngine.py
+│    └─ test.py
+├─ __init__.py
+└─ main.py
